@@ -309,6 +309,105 @@ namespace nss
                 }
             }
 
+            Dictionary<int, Cohort> allCohorts = new Dictionary<int, Cohort>();
+
+            db.Query<Student, Instructor, Cohort, StudentExercise, Exercise, Cohort>(@"
+                    SELECT  s.Id,
+                            s.FirstName,
+                            s.LastName,
+                            s.SlackHandle,
+                            s.CohortId,
+                            i.Id,
+                            i.FirstName,
+                            i.LastName,
+                            i.SlackHandle,
+                            i.Specialty,
+                            i.CohortId,
+                            c.Id,
+                            c.Name,
+                            se.Id,
+                            se.ExerciseId,
+                            se.StudentId,
+                            se.InstructorId,
+						                e.Id,
+						                e.Name,
+                            e.Language
+                    FROM Cohort c
+                    JOIN Student s on c.Id = s.CohortId
+                    LEFT JOIN Instructor i on c.Id = i.CohortId
+					          JOIN StudentExercise se on s.Id = se.StudentId
+					          JOIN Exercise e on se.ExerciseId = e.Id
+                    ", (student, instruc, cohort, studentExercise, exercise) => {
+
+                        // Determine if cohort Id exists in the dicitonary if not do the following
+                        if (!allCohorts.ContainsKey(cohort.Id)) {
+
+                        // Add the exercise to the current student
+                          student.AssignedExercises.Add(exercise);
+
+                        // If instructor is not null add it to the cohort
+                          if (instruc != null) {
+                            cohort.Instructors.Add(instruc);
+                          }
+
+                        // Add the student with the newly assigned exercise to the Students on the current cohort and create the Key on the dictionary for the current Cohort and make it's Value = the current cohort
+                          cohort.Students.Add(student);
+                          allCohorts[cohort.Id] = cohort;
+                        } else {
+
+                        // If the cohort ID exists on the dictionary to the following:
+                        // student.AssignedExercises.Add(exercise);
+
+
+                        // If the cohort's Instructors list does not have Any instructors with the current instructors first name, add that instructor to the Instructors list on cohort
+                          if (!allCohorts[cohort.Id].Instructors.Any(ins => ins.FirstName == instruc.FirstName)) {
+                            allCohorts[cohort.Id].Instructors.Add(instruc);
+                          }
+
+                        // Loop over all the students in the Student list on the current Cohort
+                          foreach (Student stud in allCohorts[cohort.Id].Students)
+                          {
+                          // If the student already exists, add the current Exercise to the AssignedExercises list on that student
+                              if (stud.FirstName == student.FirstName) {
+                                stud.AssignedExercises.Add(exercise);
+                              } else {
+                          // If the student doesn't exist, add the exercise to the current student and add that new student to the Students list on the current cohort
+                                student.AssignedExercises.Add(exercise);
+                                allCohorts[cohort.Id].Students.Add(student);
+                              }
+                          }
+
+                          // allCohorts[cohort.Id].Students.ForEach(stud => { if (stud.FirstName == student.FirstName) stud.AssignedExercises.Add(exercise); });
+
+                        }
+                        return cohort;
+                    });
+
+                    foreach (KeyValuePair<int, Cohort> cohort in allCohorts)
+                    {
+                        Console.WriteLine($"-{cohort.Value.Name}");
+
+                        foreach (Student stud in cohort.Value.Students)
+                        {
+                          List<string> studExercises = new List<string>();
+                          foreach (Exercise ex in stud.AssignedExercises)
+                          {
+                            studExercises.Add(ex.Name);
+                          }
+                          Console.WriteLine($"   {stud.SlackHandle} is a student and is assigned {String.Join(" & ", studExercises)}");
+                        }
+
+                        if (cohort.Value.Instructors.Count != 0) {
+                          foreach (Instructor inst in cohort.Value.Instructors)
+                          {
+                            Console.WriteLine($"   {inst.FirstName} {inst.LastName} is an instructor");
+                          }
+                        }
+
+
+                    }
+
+            // For each cohort, list the students and instructors
             /*
                 1. Create Exercises table and seed it
                 2. Create Student table and seed it  (use sub-selects)
